@@ -1,7 +1,8 @@
 ddddocr
 Flask
+flask-cors
 requests
-urllib3==1.25.11
-numpy==1.26.4
-opencv-python
+urllib3
 numpy
+opencv-python-headless
+Pillow

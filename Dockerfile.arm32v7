@@ -1,0 +1,38 @@
+FROM arm32v7/python:3.11-slim-bookworm AS builder
+
+RUN apt-get update && apt-get install -y \
+    git make cmake build-essential protobuf-compiler python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir setuptools wheel cython
+
+RUN git config --global http.proxy http://192.168.3.2:7897
+
+RUN git clone --depth 1 --recursive -b v1.15.0 \
+    https://github.com/microsoft/onnxruntime.git /opt/onnxruntime-src
+
+WORKDIR /opt/onnxruntime-src
+
+RUN ./build.sh --config Release --build_wheel --parallel \
+    --minimal_build --disable_ml_ops --disable_rtti \
+    --skip_submodule_sync --cmake_extra_defines CMAKE_CXX_FLAGS="-Os" \
+    2>&1 | tail -5
+
+RUN pip install --no-cache-dir /opt/onnxruntime-src/build/Linux/Release/dist/*.whl
+
+# ---- Final stage ----
+FROM arm32v7/python:3.11-slim-bookworm
+
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0t64 libgl1 libpython3.11 python3-numpy python3-opencv python3-pil \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/lib/python3.11/site-packages/onnxruntime* /usr/local/lib/python3.11/site-packages/
+
+WORKDIR /app
+COPY . /app
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+EXPOSE 7777
+CMD ["python", "server.py"]
